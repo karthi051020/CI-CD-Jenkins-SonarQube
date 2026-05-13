@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_REPO = 'your-dockerhub-username/your-app'
-        SONAR_PROJECT  = 'your-project-key'
+        DOCKERHUB_REPO = docker push 'karthi051020/jenkinsdocker'
+        SONAR_PROJECT  = 'SonarQube'
     }
 
     stages {
