@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_REPO = docker push 'karthi051020/jenkinsdocker'
+        DOCKERHUB_REPO = 'karthi051020/jenkinsdocker'
         SONAR_PROJECT  = 'SonarQube'
     }
 
