@@ -11,7 +11,7 @@ pipeline {
         stage('Build & Test') {
             steps {
                 sh 'pip install -r requirements.txt --quiet'
-                sh 'python -m pytest testapp.py -v'
+                sh 'python -m pytest test_app.py -v'
             }
         }
 
