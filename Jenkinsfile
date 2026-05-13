@@ -13,7 +13,9 @@ pipeline {
                 sh '''
                     python3 -m venv venv
                     . venv/bin/activate
+
                     pip install -r requirements.txt --quiet
+
                     python3 -m pytest test_app.py -v
                 '''
             }
@@ -22,8 +24,9 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
+
                     sh """
-                        sonar-scanner \
+                        /opt/sonar-scanner/bin/sonar-scanner \
                             -Dsonar.projectKey=${SONAR_PROJECT} \
                             -Dsonar.sources=. \
                             -Dsonar.host.url=${SONAR_HOST_URL} \
@@ -35,21 +38,27 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
+
                 timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
+
             }
         }
 
         stage('Docker Build') {
             steps {
+
                 sh "docker build -t ${DOCKERHUB_REPO}:${BUILD_NUMBER} ."
+
                 sh "docker tag ${DOCKERHUB_REPO}:${BUILD_NUMBER} ${DOCKERHUB_REPO}:latest"
+
             }
         }
 
         stage('Push to DockerHub') {
             steps {
+
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-creds',
@@ -57,8 +66,11 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )
                 ]) {
+
                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+
                     sh "docker push ${DOCKERHUB_REPO}:${BUILD_NUMBER}"
+
                     sh "docker push ${DOCKERHUB_REPO}:latest"
                 }
             }
@@ -67,9 +79,10 @@ pipeline {
         stage('Deploy') {
             steps {
 
-                // For local deploy
+                // Stop and remove old container
                 sh "docker stop app || true && docker rm app || true"
 
+                // Run latest container
                 sh """
                     docker run -d \
                         --name app \
@@ -77,9 +90,11 @@ pipeline {
                         ${DOCKERHUB_REPO}:latest
                 """
 
-                // For EC2 deploy — uncomment and set your EC2 IP
                 /*
+                // For EC2 deployment
+
                 sshagent(['ec2-ssh']) {
+
                     sh """
                         ssh -o StrictHostKeyChecking=no ubuntu@<EC2-IP> '
                             docker pull ${DOCKERHUB_REPO}:latest &&
@@ -95,6 +110,7 @@ pipeline {
     }
 
     post {
+
         success {
             echo 'Deployed successfully.'
         }
