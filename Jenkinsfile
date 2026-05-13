@@ -10,8 +10,12 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                sh 'pip3 install -r requirements.txt --quiet'
-                sh 'python3 -m pytest test_app.py -v'
+                sh '''
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install -r requirements.txt --quiet
+                    python3 -m pytest test_app.py -v
+                '''
             }
         }
 
@@ -20,10 +24,10 @@ pipeline {
                 withSonarQubeEnv('SonarQube') {
                     sh """
                         sonar-scanner \
-                          -Dsonar.projectKey=${SONAR_PROJECT} \
-                          -Dsonar.sources=. \
-                          -Dsonar.host.url=${SONAR_HOST_URL} \
-                          -Dsonar.login=${SONAR_AUTH_TOKEN}
+                            -Dsonar.projectKey=${SONAR_PROJECT} \
+                            -Dsonar.sources=. \
+                            -Dsonar.host.url=${SONAR_HOST_URL} \
+                            -Dsonar.login=${SONAR_AUTH_TOKEN}
                     """
                 }
             }
@@ -46,12 +50,14 @@ pipeline {
 
         stage('Push to DockerHub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
                     sh "docker push ${DOCKERHUB_REPO}:${BUILD_NUMBER}"
                     sh "docker push ${DOCKERHUB_REPO}:latest"
                 }
@@ -60,25 +66,41 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                // For local deploy:
-                sh "docker stop app || true && docker rm app || true"
-                sh "docker run -d --name app -p 5000:5000 ${DOCKERHUB_REPO}:latest"
 
-                // For EC2 deploy — uncomment and set your EC2 IP:
-                // sshagent(['ec2-ssh']) {
-                //     sh """
-                //         ssh -o StrictHostKeyChecking=no ubuntu@<EC2-IP> \
-                //         'docker pull ${DOCKERHUB_REPO}:latest && \
-                //          docker stop app || true && docker rm app || true && \
-                //          docker run -d --name app -p 5000:5000 ${DOCKERHUB_REPO}:latest'
-                //     """
-                // }
+                // For local deploy
+                sh "docker stop app || true && docker rm app || true"
+
+                sh """
+                    docker run -d \
+                        --name app \
+                        -p 5000:5000 \
+                        ${DOCKERHUB_REPO}:latest
+                """
+
+                // For EC2 deploy — uncomment and set your EC2 IP
+                /*
+                sshagent(['ec2-ssh']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ubuntu@<EC2-IP> '
+                            docker pull ${DOCKERHUB_REPO}:latest &&
+                            docker stop app || true &&
+                            docker rm app || true &&
+                            docker run -d --name app -p 5000:5000 ${DOCKERHUB_REPO}:latest
+                        '
+                    """
+                }
+                */
             }
         }
     }
 
     post {
-        failure { echo 'Pipeline failed — check logs above.' }
-        success { echo 'Deployed successfully.' }
+        success {
+            echo 'Deployed successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed — check logs above.'
+        }
     }
 }
